@@ -543,7 +543,14 @@ void LowLevelGraphicsSVGRenderer::drawGlyphs(
     for (size_t i = 0; i < glyphNumbers.size(); ++i)
     {
         juce::Path p;
+       #if JUCE_VERSION >= 0x08000d
+        // 8.0.13+ normalises outlines to a point size of 1.0; scale back to JUCE height units
+        const auto typeface = f.getTypefacePtr();
+        typeface->getOutlineForGlyph(glyphNumbers[i], p);
+        p.applyTransform(juce::AffineTransform::scale(typeface->getMetrics(f.getMetricsKind()).heightToPoints));
+       #else
         f.getTypefacePtr()->getOutlineForGlyph(f.getMetricsKind(), glyphNumbers[i], p);
+       #endif
 
         p.applyTransform(
             glyphScale
