@@ -125,17 +125,13 @@ numbered batch before and after and compare checksums (`md5`): views
 without animation should match byte for byte. Byte-identical PNGs across
 requests that should differ mean a stale instance serviced them.
 
-## Migration from UrsaVerb (in progress)
+## Users
 
-The rig moves out of `UvrbScreenshotManager`, `UvrbCapturePose` and
-MainUI's pose methods. UrsaVerb keeps a `UvrbCaptureHost` for its views,
-Key grid order, EQ menu, presets and value readout type-in. The request
-format does not change, so existing scripts keep working.
+- **UrsaVerb**: `UvrbCaptureHost` (`plugin/src/ui/uvrb_capture_host.h`)
+  supplies its views, Key grid order, EQ menu, presets and value-readout
+  type-in. Its `CLAUDE.md` lists its views and component ids.
 
-- [ ] Shared classes in `capture/`; module depends on `juce_audio_processors`
-- [ ] UrsaVerb: `UvrbCaptureHost`; old manager, pose class and MainUI's
-      generic pose methods removed
-- [ ] Request format reference moved from UrsaVerb's `CLAUDE.md` to the
-      README; UrsaVerb keeps only its views and component ids
-- [ ] Before/after capture batch matches
-- [ ] Wired into the plugin template (`urpdefault`)
+## In progress
+
+- [ ] Wire into the plugin template (`urpdefault`), so new plugins start
+      with the rig.
