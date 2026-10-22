@@ -130,8 +130,6 @@ requests that should differ mean a stale instance serviced them.
 - **UrsaVerb**: `UvrbCaptureHost` (`plugin/src/ui/uvrb_capture_host.h`)
   supplies its views, Key grid order, EQ menu, presets and value-readout
   type-in. Its `CLAUDE.md` lists its views and component ids.
-
-## In progress
-
-- [ ] Wire into the plugin template (`urpdefault`), so new plugins start
-      with the rig.
+- **The plugin template** (`urpdefault`): every generated plugin adds this
+  module, a Debug Standalone target, and a `<Prefix>CaptureHost` with no
+  views yet, so captures work from the first build.
