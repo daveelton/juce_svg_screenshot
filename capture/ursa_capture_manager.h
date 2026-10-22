@@ -210,7 +210,15 @@ private:
             }
 
             if (req.visibleSince == 0)
+            {
                 req.visibleSince = now;
+
+                // whatever the real mouse rests on (a highlighted readout, a
+                // tooltip) must not show; the delay gives the UI time to
+                // repaint without it
+                if (!req.hasPointerPose())
+                    pointer.park();
+            }
 
             if (now - req.visibleSince < req.delayMs)
             {

@@ -76,7 +76,10 @@ arrival-gated like `all_when_visible`. PDF is macOS only.
 Every mode waits until its target is showing (hidden components paint
 transparent), then for `delay_ms`. A request whose target never shows
 waits indefinitely, which can be used on purpose: drop the request, then
-switch to the right tab. `scale` scales raster output (`2.0` = @2x).
+switch to the right tab. When the delay starts, a request without a
+pointer pose tells JUCE the pointer has left the window, so a hover
+highlight or tooltip under the resting mouse doesn't show; the real cursor
+doesn't move. `scale` scales raster output (`2.0` = @2x).
 `all` and `region` composite open popup windows (menus) into the image;
 `component` does not.
 

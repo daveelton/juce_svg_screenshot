@@ -76,6 +76,10 @@ hover, press and focus poses.
   poses, then (after the window has had 400 ms to come to the front)
   hover, press, focus, type-in, and last `save_state`, so a saved state
   records everything above it. `delay_ms` counts from the last pose.
+- Where the real mouse rests doesn't show: when the delay starts, a
+  request without a pointer pose parks JUCE's pointer outside the window
+  (`UrsaPointerPose::park`), clearing hover highlights and tooltips. The
+  real cursor doesn't move, and its next movement is tracked as usual.
 - Any pose that can't be applied rejects the whole request. A log line
   gives the reason and the request file is deleted, so a bad request
   never waits forever.

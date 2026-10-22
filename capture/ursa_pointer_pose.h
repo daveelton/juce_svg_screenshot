@@ -88,15 +88,21 @@ public:
         and the pointer leaves the window, so nothing stays hovered. */
     void release()
     {
-        const auto away = uiRoot.localPointToGlobal(juce::Point<float>(-64.0f, -64.0f));
-
         if (pointerDown)
         {
-            sendPointerEvent(away, juce::ModifierKeys(juce::ModifierKeys::leftButtonModifier));
+            sendPointerEvent(awayPoint(), juce::ModifierKeys(juce::ModifierKeys::leftButtonModifier));
             pointerDown = false;
         }
 
-        sendPointerEvent(away, juce::ModifierKeys::noModifiers);
+        park();
+    }
+
+    /** Tell JUCE the pointer has left the window, so no hover highlight or
+        tooltip shows in a capture. The real cursor doesn't move: JUCE takes
+        it back from the next real mouse movement. */
+    void park()
+    {
+        sendPointerEvent(awayPoint(), juce::ModifierKeys::noModifiers);
     }
 
     bool focus(juce::Component* target)
@@ -140,6 +146,11 @@ public:
     }
 
 private:
+    juce::Point<float> awayPoint() const
+    {
+        return uiRoot.localPointToGlobal(juce::Point<float>(-64.0f, -64.0f));
+    }
+
     juce::Component& uiRoot;
     bool pointerDown { false };
     bool windowWasAlwaysOnTop { false };
