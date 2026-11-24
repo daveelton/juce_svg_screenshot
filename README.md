@@ -50,6 +50,7 @@ plugin log says why and the request file is deleted.
 {"mode": "all_when_visible", "component_id": "<id>", "delay_ms": 300}
 {"mode": "svg", "component_id": "<id>", "delay_ms": 800}
 {"mode": "svg", "trigger_id": "<id>", "delay_ms": 400}
+{"mode": "svg", "svg_text": true, "delay_ms": 800}
 {"mode": "pdf", "delay_ms": 300}
 {"mode": "all", "set_params": {"<paramID>": 1.0}, "delay_ms": 700}
 {"mode": "all", "set_params_text": {"<paramID>": "8.0 s"}, "delay_ms": 700}
@@ -71,7 +72,9 @@ UI, in UI coordinates. `all_when_visible` captures the whole UI when
 `component_id` appears, and only on arrival: it must be seen hidden
 first, so queue one per tab and click through. `svg`/`pdf` are vector
 exports of the whole UI or of `component_id`; with `trigger_id` they are
-arrival-gated like `all_when_visible`. PDF is macOS only.
+arrival-gated like `all_when_visible`. `svg_text` writes text as
+editable `<text>` elements instead of outlines (see What you get). PDF is
+macOS only.
 
 Every mode waits until its target is showing (hidden components paint
 transparent), then for `delay_ms`. A request whose target never shows
@@ -132,7 +135,13 @@ PDF (macOS), as `plugin/screenshots/manual_<timestamp>.*`.
   (`stop-opacity`). Components render inside named `<g>` groups
   (componentID where set, else class name), single-child wrapper chains
   collapsed. Images (`drawImage`, buffered caches are bypassed during
-  export) embed as base64 PNG. Text arrives as glyph outline paths.
+  export) embed as base64 PNG. Text arrives as glyph outline paths, or
+  with `svg_text` as one `<text>` per line: font family, weight, size,
+  tracking and fill, mapped back from glyphs through the font's cmap.
+  Those need the fonts installed wherever the SVG is opened; letters are
+  laid out by that app, so they can sit a fraction of a pixel from the
+  plugin's. A glyph with no character behind it, or a rotated run, stays
+  an outline. Each `<text>` carries `data-bbox` (its outlines' bounds).
 - **PDF (macOS, secondary)**: JUCE's own CoreGraphics renderer into a
   `CGPDFContext` — production-faithful geometry and embedded-font text,
   but Quartz drops per-stop gradient alpha (PDF shadings can't express
@@ -164,6 +173,13 @@ Changes are marked `JUCE 8 port` / `CTM overhaul` in the sources:
   radius) into SVG `fx`/`fy` as a focal point, collapsing the stop ramp
   toward the rim (crescent shadows, squashed glows). No focal point is
   emitted now.
+- Fix: `clipToImageAlpha` (how `juce::DropShadow` fills) created its
+  masked group at the document's top level, so the fill landed after
+  everything drawn so far — a card's shadow over the card instead of
+  behind it. It now nests under the current clip group, as `setClip`
+  does, and the mask PNG is an opaque grey of the coverage (the alpha
+  image's colour channels held junk that luminance-reading apps showed).
+- Optional `<text>` output from `drawGlyphs` (`setGlyphsAsText`), above.
 - Emission culling: fully transparent fills and geometry whose device
   bounds miss the current clip are skipped — invisible on screen anyway,
   and emitting them corrupted consumers that measure group bounds

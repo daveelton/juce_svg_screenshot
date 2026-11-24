@@ -153,13 +153,16 @@ private:
  * LowLevelGraphicsSVGRenderer (vector/) with per-component named groups
  * (UrsaSvgGroupScope above), then collapses the paint recursion's
  * single-child wrapper chains so the layer tree a designer sees is the
- * component tree, not the clip plumbing. Glyphs arrive as outline paths.
+ * component tree, not the clip plumbing. Glyphs arrive as outline paths,
+ * or as <text> when asked.
  * Message thread only.
  */
 class UrsaSvgExporter
 {
 public:
-    static bool exportComponent(juce::Component& comp, const juce::File& outFile)
+    /** glyphsAsText: write text as editable <text> elements rather than
+        outlines (LowLevelGraphicsSVGRenderer::setGlyphsAsText). */
+    static bool exportComponent(juce::Component& comp, const juce::File& outFile, bool glyphsAsText = false)
     {
         const auto w = comp.getWidth();
         const auto h = comp.getHeight();
@@ -169,6 +172,7 @@ public:
         juce::XmlElement svg("svg");
         {
             LowLevelGraphicsSVGRenderer renderer(&svg, w, h);
+            renderer.setGlyphsAsText(glyphsAsText);
             juce::Graphics g(renderer);
 
             const UrsaSvgGroupScope groups(comp);

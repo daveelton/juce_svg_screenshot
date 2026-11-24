@@ -190,15 +190,33 @@ void LowLevelGraphicsSVGRenderer::clipToImageAlpha(
     if (!placed.isIdentity())
         image->setAttribute("transform", writeTransform(placed));
 
+    // an SVG mask is luminance x alpha. Write the coverage as an opaque grey
+    // so every reader agrees on it: the alpha image's PNG carried junk in its
+    // colour channels, which readers that take luminance alone (Affinity)
+    // turned into darker edges
+    juce::Image greyImage(juce::Image::RGB, maskImage.getWidth(), maskImage.getHeight(), true);
+    {
+        const juce::Image::BitmapData src(maskImage, juce::Image::BitmapData::readOnly);
+        for (int y = 0; y < maskImage.getHeight(); ++y)
+            for (int x = 0; x < maskImage.getWidth(); ++x)
+                greyImage.setPixelAt(x, y, juce::Colour::greyLevel(src.getPixelColour(x, y).getFloatAlpha()));
+    }
+
     juce::MemoryOutputStream out;
     juce::PNGImageFormat png;
-    png.writeImageToStream(i, out);
+    png.writeImageToStream(greyImage, out);
 
     auto base64Data = juce::Base64::toBase64(out.getData(), out.getDataSize());
 
     image->setAttribute("xlink:href", "data:image/png;base64," + base64Data);
 
-    state->clipGroup = document->createNewChildElement("g");
+    // nest under the current clip group, as setClip does: at the document's
+    // top level the masked fill landed after everything drawn so far,
+    // painting e.g. a card's drop shadow over the card instead of behind it
+    if (!state->clipGroup)
+        state->clipGroup = document->createNewChildElement("g");
+
+    state->clipGroup = state->clipGroup->createNewChildElement("g");
     state->clipGroup->setAttribute("mask", "url(" + maskRef + ")");
 }
 
@@ -534,31 +552,152 @@ void LowLevelGraphicsSVGRenderer::drawGlyphs(
     // glyph's position ahead of the caller's transform.
     jassert(glyphNumbers.size() == positions.size());
 
-    juce::Font& f = state->font;
-
-    auto glyphScale = juce::AffineTransform::scale(
-        f.getHeight() * f.getHorizontalScale(),
-        f.getHeight());
+    if (glyphsAsText && drawGlyphsAsText(glyphNumbers, positions, t))
+        return;
 
     for (size_t i = 0; i < glyphNumbers.size(); ++i)
+        fillPath(glyphOutline(glyphNumbers[i], positions[i], t), juce::AffineTransform());
+}
+
+juce::Path LowLevelGraphicsSVGRenderer::glyphOutline(
+    juce::uint16 glyph,
+    juce::Point<float> position,
+    const juce::AffineTransform& t)
+{
+    juce::Font& f = state->font;
+
+    juce::Path p;
+   #if JUCE_VERSION >= 0x08000d
+    // 8.0.13+ normalises outlines to a point size of 1.0; scale back to JUCE height units
+    const auto typeface = f.getTypefacePtr();
+    typeface->getOutlineForGlyph(glyph, p);
+    p.applyTransform(juce::AffineTransform::scale(typeface->getMetrics(f.getMetricsKind()).heightToPoints));
+   #else
+    f.getTypefacePtr()->getOutlineForGlyph(f.getMetricsKind(), glyph, p);
+   #endif
+
+    p.applyTransform(
+        juce::AffineTransform::scale(f.getHeight() * f.getHorizontalScale(), f.getHeight())
+            .translated(position)
+            .followedBy(t));
+    return p;
+}
+
+const std::unordered_map<juce::uint32, juce::juce_wchar>& LowLevelGraphicsSVGRenderer::charactersFor(
+    const juce::Typeface::Ptr& typeface)
+{
+    if (auto found = glyphCharacters.find(typeface.get()); found != glyphCharacters.end())
+        return found->second;
+
+    // the cmap only maps characters to glyphs, so walk the ranges UI text
+    // uses and invert; the lowest character wins where two share a glyph
+    static constexpr std::pair<juce::juce_wchar, juce::juce_wchar> ranges[] = {
+        { 0x20, 0x7e },     // ASCII
+        { 0xa0, 0x24f },    // Latin-1, Latin Extended A/B
+        { 0x370, 0x3ff },   // Greek (µ, Ω)
+        { 0x2000, 0x206f }, // punctuation: dashes, quotes, ellipsis, thin spaces
+        { 0x2070, 0x20cf }, // super/subscripts, currency
+        { 0x2100, 0x22ff }, // letterlike, arrows, maths (−, ∞, ≈)
+        { 0x2500, 0x27bf }, // box drawing, shapes, symbols, dingbats
+    };
+
+    std::unordered_map<juce::uint32, juce::juce_wchar> characters;
+    for (const auto& [first, last] : ranges)
+        for (auto c = first; c <= last; ++c)
+            if (const auto glyph = typeface->getNominalGlyphForCodepoint(c))
+                characters.emplace(*glyph, c);
+
+    mappedTypefaces.add(typeface);
+    return glyphCharacters.emplace(typeface.get(), std::move(characters)).first->second;
+}
+
+bool LowLevelGraphicsSVGRenderer::drawGlyphsAsText(
+    juce::Span<const juce::uint16> glyphNumbers,
+    juce::Span<const juce::Point<float>> positions,
+    const juce::AffineTransform& t)
+{
+    const auto device = deviceTransform(t);
+    if (device.mat01 != 0.0f || device.mat10 != 0.0f || device.mat00 <= 0.0f || device.mat11 <= 0.0f)
+        return false;
+
+    juce::Font& f = state->font;
+    const auto typeface = f.getTypefacePtr();
+    if (typeface == nullptr)
+        return false;
+
+    const auto& characters = charactersFor(typeface);
+    for (auto glyph : glyphNumbers)
+        if (characters.find(glyph) == characters.end())
+            return false;
+
+    const auto style = typeface->getStyle();
+    const auto weight = [&style]() -> int
     {
-        juce::Path p;
-       #if JUCE_VERSION >= 0x08000d
-        // 8.0.13+ normalises outlines to a point size of 1.0; scale back to JUCE height units
-        const auto typeface = f.getTypefacePtr();
-        typeface->getOutlineForGlyph(glyphNumbers[i], p);
-        p.applyTransform(juce::AffineTransform::scale(typeface->getMetrics(f.getMetricsKind()).heightToPoints));
-       #else
-        f.getTypefacePtr()->getOutlineForGlyph(f.getMetricsKind(), glyphNumbers[i], p);
-       #endif
+        const auto s = style.toLowerCase().removeCharacters(" -");
+        if (s.contains("extralight") || s.contains("ultralight")) return 200;
+        if (s.contains("semibold") || s.contains("demibold")) return 600;
+        if (s.contains("extrabold") || s.contains("ultrabold")) return 800;
+        if (s.contains("thin")) return 100;
+        if (s.contains("light")) return 300;
+        if (s.contains("medium")) return 500;
+        if (s.contains("bold")) return 700;
+        if (s.contains("black") || s.contains("heavy")) return 900;
+        return 400;
+    }();
 
-        p.applyTransform(
-            glyphScale
-                .translated(positions[i])
-                .followedBy(t));
+    const auto emSize = f.getHeight() * typeface->getMetrics(f.getMetricsKind()).heightToPoints;
+    const auto stretch = f.getHorizontalScale() * device.mat00 / device.mat11;
+    const auto tracking = f.getExtraKerningFactor() * f.getHeight() * device.mat00;
 
-        fillPath(p, juce::AffineTransform());
+    // one <text> per baseline: a multi-line layout arrives as one run
+    for (size_t start = 0; start < glyphNumbers.size();)
+    {
+        auto end = start + 1;
+        while (end < glyphNumbers.size() && positions[end].y == positions[start].y)
+            ++end;
+
+        juce::String run;
+        juce::Path outlines;
+        for (auto i = start; i < end; ++i)
+        {
+            run << juce::String::charToString(characters.at(glyphNumbers[i]));
+            outlines.addPath(glyphOutline(glyphNumbers[i], positions[i], t));
+        }
+        const auto bounds = outlines.getBounds().transformedBy(state->transform);
+        const auto origin = positions[start].transformedBy(device);
+        start = end;
+
+        if (run.trim().isEmpty() || shouldSkipDrawing(bounds))
+            continue;
+
+        auto* text = state->clipGroup ? state->clipGroup->createNewChildElement("text")
+                                      : document->createNewChildElement("text");
+
+        text->setAttribute("x", truncateFloat(origin.x));
+        text->setAttribute("y", truncateFloat(origin.y));
+        text->setAttribute("font-family", typeface->getName());
+        text->setAttribute("font-weight", weight);
+        if (style.containsIgnoreCase("italic") || style.containsIgnoreCase("oblique"))
+            text->setAttribute("font-style", "italic");
+        text->setAttribute("font-size", truncateFloat(emSize * device.mat11));
+        if (std::abs(tracking) > 0.001f)
+            text->setAttribute("letter-spacing", truncateFloat(tracking));
+        if (std::abs(stretch - 1.0f) > 0.001f)
+            text->setAttribute(
+                "transform",
+                "matrix(" + truncateFloat(stretch) + " 0 0 1 " + truncateFloat(origin.x * (1.0f - stretch)) + " 0)");
+        text->setAttribute("fill", writeFill());
+        text->setAttribute("fill-opacity", truncateFloat(state->fillType.getOpacity()));
+        text->setAttribute("xml:space", "preserve");
+        text->setAttribute(
+            "data-bbox",
+            truncateFloat(bounds.getX()) + " " + truncateFloat(bounds.getY()) + " "
+                + truncateFloat(bounds.getRight()) + " " + truncateFloat(bounds.getBottom()));
+        text->addTextElement(run);
+
+        applyTags(text);
     }
+    return true;
 }
 #else
 void LowLevelGraphicsSVGRenderer::drawGlyph(int glyphNumber, const juce::AffineTransform& t)

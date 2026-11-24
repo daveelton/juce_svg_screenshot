@@ -295,7 +295,7 @@ private:
             return false;
 
         if (req.mode == "svg")
-            return UrsaSvgExporter::exportComponent(*target, screenshotDir.getChildFile(req.name + ".svg"));
+            return UrsaSvgExporter::exportComponent(*target, screenshotDir.getChildFile(req.name + ".svg"), req.svgText);
 
         if (req.mode == "pdf")
         {

@@ -214,6 +214,16 @@ public:
         juce::Span<const juce::uint16> glyphNumbers,
         juce::Span<const juce::Point<float>> positions,
         const juce::AffineTransform&) override;
+
+    /** With this on, drawGlyphs writes each line of glyphs as an editable
+        <text> element (font family, weight, size, tracking, fill) instead of
+        outline paths. A run it can't express stays outlines: a glyph with
+        no character behind it, or a rotated or sheared transform. Off by
+        default: outlines look right without the fonts installed. Each
+        <text> carries data-bbox, its outlines' device bounds, for tools
+        that need its extent (tools/tidy_svg.py).
+    */
+    void setGlyphsAsText(bool shouldWriteText) { glyphsAsText = shouldWriteText; }
 #else
     void drawGlyph(int glyphNumber, const juce::AffineTransform&) override;
 #endif
@@ -438,6 +448,25 @@ private:
         const juce::Justification&);
 
     void setClip(const juce::Path&);
+
+#if JUCE_MAJOR_VERSION >= 8
+    /** A glyph's outline in user space, placed at its position. */
+    juce::Path glyphOutline(juce::uint16 glyph, juce::Point<float> position, const juce::AffineTransform&);
+
+    /** drawGlyphs' text route; false, having written nothing, when the run
+        can't be written as text. */
+    bool drawGlyphsAsText(
+        juce::Span<const juce::uint16> glyphNumbers,
+        juce::Span<const juce::Point<float>> positions,
+        const juce::AffineTransform&);
+
+    /** glyph -> character for a typeface, built once from its cmap. */
+    const std::unordered_map<juce::uint32, juce::juce_wchar>& charactersFor(const juce::Typeface::Ptr&);
+
+    bool glyphsAsText = false;
+    std::map<const juce::Typeface*, std::unordered_map<juce::uint32, juce::juce_wchar>> glyphCharacters;
+    juce::Array<juce::Typeface::Ptr> mappedTypefaces; // keeps the map's keys alive
+#endif
 
 #pragma mark -
     // =========================================================================

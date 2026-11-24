@@ -22,6 +22,7 @@ public:
         delayMs = json.getProperty("delay_ms", 200);
         componentId = json.getProperty("component_id", "").toString();
         triggerId = json.getProperty("trigger_id", "").toString();
+        svgText = json.getProperty("svg_text", false);
         view = json.getProperty("view", "").toString();
         scale = static_cast<float>(double(json.getProperty("scale", 1.0)));
         x = json.getProperty("x", 0);
@@ -66,6 +67,7 @@ public:
     juce::String mode;        // "all", "component", "region", "all_when_visible", "svg", "pdf" (macOS)
     juce::String componentId; // "component"/"svg"/"pdf" target; trigger for "all_when_visible"
     juce::String triggerId;   // svg/pdf only: arrival-gated FULL-UI export when this component shows
+    bool svgText { false };   // svg only: text as editable <text> elements, not outlines
     juce::String view;
     float scale { 1.0f }; // raster modes only (2.0 = @2x)
     int x { 0 }, y { 0 }, w { 0 }, h { 0 }; // "region"
