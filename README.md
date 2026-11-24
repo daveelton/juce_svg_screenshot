@@ -142,6 +142,21 @@ PDF (macOS), as `plugin/screenshots/manual_<timestamp>.*`.
   laid out by that app, so they can sit a fraction of a pixel from the
   plugin's. A glyph with no character behind it, or a rotated run, stays
   an outline. Each `<text>` carries `data-bbox` (its outlines' bounds).
+- **Tidy for editing**: `tools/tidy_svg.py` rewrites an SVG export into a
+  layer tree a designer can work in: wrapper clips collapsed, clips
+  dropped where nothing reaches them, class-named and unnamed groups named
+  after their control (`mix_knob.Label`, `mix_knob.paint`), drop shadows
+  baked from masks into plain images (Pillow), dense rect runs merged,
+  and optional top-level sections from a JSON file. Usage is in the
+  script's docstring:
+  `python3 tools/tidy_svg.py --sections sections.json --out tidy/ export.svg`.
+  Rendered in Chrome, a tidied file matches its export to within a few
+  levels per pixel; `tools/check_tidy.py` renders both and compares.
+- **`/design-svgs`** (Claude Code skill, `.claude/skills/design-svgs/`):
+  exports every view of the plugin with text on, tidies and checks them,
+  into `temp/design-svgs/<date>/` of the plugin repo. It reads the views
+  from the plugin's CLAUDE.md and top-level sections from a
+  `svg_tidy_sections.json` in the plugin repo.
 - **PDF (macOS, secondary)**: JUCE's own CoreGraphics renderer into a
   `CGPDFContext` — production-faithful geometry and embedded-font text,
   but Quartz drops per-stop gradient alpha (PDF shadings can't express
